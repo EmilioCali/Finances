@@ -640,3 +640,58 @@ Las decisiones D-001 a D-014 están cerradas el 21 de noviembre de 2026. Una dec
 | Id | Fecha | Decisión | Motivo |
 | --- | --- | --- | --- |
 | D-001 … D-014 | 2026-11-21 | Plan inicial | Poder repartir front, motor y agente sin acordar contratos a mitad de la hackathon. |
+| D-015 | 2026-11-21 | La lectura CSV/XLSX no usa pandas. Usa el módulo `csv` y openpyxl. | En esta máquina el binario nativo de pandas lo bloquea el control de aplicaciones. El motor no necesita dataframes: valida filas y calcula con `Decimal`. |
+| D-016 | 2026-11-21 | En un archivo, la primera fila de una clave se acepta y las siguientes salen `DUPLICATE`. Contra la base, se conserva la fila ya guardada. | D-005 no decía cuál de las dos copias gana. |
+| D-017 | 2026-11-21 | Un escenario está duplicado cuando el nombre coincide exactamente. Respuesta `409`. | Hace concreto el `409` de escenario duplicado. |
+| D-018 | 2026-11-21 | La simulación corre sobre todas las líneas importadas. R1 se comprueba con `GET /api/consolidation?period=2026-01` y con el punto `2026-01` de `series` en los resultados. | El ejemplo de resultados del plan es el mes de enero. El seed trae tres meses para la gráfica. |
+| D-019 | 2026-11-21 | La variación absoluta es la resta de cifras ya cuantizadas. El porcentaje es esa diferencia dividida por la base y cuantizada a 2 decimales. En R1 cierra sin residuo. | D-007 dejaba anotada una posible diferencia. No hizo falta. |
+| D-020 | 2026-11-21 | `fxRates` del resultado siempre trae GTQ, USD y MXN. `adjustments` devuelve los ajustes guardados. Si una moneda quedara con dos tasas distintas, el resumen muestra la tasa base y cada línea usa la suya. | El JSON de ejemplo abrevia ajustes y solo muestra GTQ. Con una empresa por moneda, la tasa publicada es la que se aplicó. |
+
+## Avance TKT-001 — Motor financiero
+
+Estado: terminado el 21 de noviembre de 2026. Pruebas del motor en verde (`14 passed`), incluido R1. Sin Grok y sin frontend.
+
+Hecho en esta pasada:
+
+1. FastAPI con health, SQLite, empresas y `python -m app.seed`.
+2. Importación CSV y XLSX, con `dry_run`, catálogo, alias y duplicados.
+3. Consolidado con trazabilidad por línea.
+4. Escenarios y simulación. Crear el escenario no toca los originales. Simular tampoco.
+5. Prueba automatizada de R1: conversión, ajustes combinados, originales intactos, tasa inválida y porcentaje que dejaría el importe en cero o negativo.
+6. Tres CSV de demo y Swagger en `/docs`.
+
+Archivos de esta persona: `backend/app/engine/`, `backend/app/api/finance.py`, `backend/app/db/`, `backend/tests/engine/`, `backend/data/demo/`. Compartidos que sí se tocaron: `backend/app/main.py`, `backend/app/schemas/common.py`, `backend/requirements.txt`, `backend/.env.example` y este archivo. No se escribió en `backend/app/agent/`.
+
+El agente puede montar su router en `backend/app/main.py`, en el comentario que marca TKT-003. Los errores ya salen con la forma de D-010.
+
+### Listo para el resto del equipo
+
+| Punto | Estado | Qué pueden hacer |
+| --- | --- | --- |
+| I1 | Listo | `GET /api/health` y `GET /api/companies` después del seed. |
+| I2 | Listo | `GET /api/consolidation?period=2026-01` devuelve resultado `15000.00`. |
+| I3 | Listo | `POST /api/scenarios` y `POST /api/scenarios/{id}/simulate` devuelven el JSON de resultados. |
+
+Con el seed cargado, el consolidado de todos los meses no es el de enero. Enero sigue siendo R1. La serie base es:
+
+| Periodo | Ingresos | Gastos | Resultado |
+| --- | --- | --- | --- |
+| 2026-01 | 28000.00 | 13000.00 | 15000.00 |
+| 2026-02 | 31000.00 | 14500.00 | 16500.00 |
+| 2026-03 | 34000.00 | 16000.00 | 18000.00 |
+| Total | 93000.00 | 43500.00 | 49500.00 |
+
+Esos totales salen de `backend/data/demo/empresa-a.csv` (company-gt), `empresa-b.csv` (company-us) y `empresa-c.csv` (company-mx). En «Crisis Guatemala» el punto de enero de `series` sigue en `14181.82`. Si solo se importa enero, el total simulado también es `14181.82`.
+
+Arranque, desde `backend/`:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python -m app.seed
+uvicorn app.main:app --reload --port 8000
+```
+
+Pruebas: `python -m pytest` dentro de `backend/`.

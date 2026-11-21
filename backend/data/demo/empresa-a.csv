@@ -1,0 +1,7 @@
+period,category,record_type,currency,amount
+2026-01,Ventas,REVENUE,GTQ,77500
+2026-01,Costos operativos,EXPENSE,GTQ,38750
+2026-02,Ventas,REVENUE,GTQ,85250
+2026-02,gastos operativos,EXPENSE,GTQ,42625
+2026-03,ingresos,REVENUE,GTQ,93000
+2026-03,nómina,EXPENSE,GTQ,46500
