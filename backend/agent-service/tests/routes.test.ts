@@ -19,9 +19,11 @@ describe("routes (stage-1 acceptance)", () => {
     apps.push(app);
     const response = await app.inject({ method: "GET", url: "/health" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       status: "ok",
       service: "scenariolab-agent",
+      engineMode: "fake",
+      traceBackend: "memory",
     });
   });
 

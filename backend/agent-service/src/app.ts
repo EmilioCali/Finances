@@ -5,14 +5,14 @@ import Fastify, {
 } from "fastify";
 
 import type { AgentSettings } from "./config/env.js";
-import { settingsFromValues } from "./config/env.js";
+import { isApiKeyConfigured, settingsFromValues } from "./config/env.js";
 import { createTraceStore } from "./db/supabase.js";
-import { InMemoryTraceStore, type TraceStore } from "./db/traces.js";
+import type { TraceStore } from "./db/traces.js";
 import { AgentError } from "./domain/errors.js";
 import { IdempotencyCache } from "./domain/idempotency.js";
 import { interpretMessage } from "./domain/interpreter.js";
 import { AgentOrchestrator } from "./domain/orchestrator.js";
-import { FakeFinanceTools } from "./engine/fake.js";
+import { createFinanceTools } from "./engine/factory.js";
 import type { FinanceTools } from "./engine/types.js";
 import {
   chatRequestSchema,
@@ -35,18 +35,27 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? false });
   const settings = deps.settings;
   const xaiClient = new XAIClient(settings, deps.xaiTransport);
-  const financeTools = deps.financeTools ?? new FakeFinanceTools();
-  const traceStore =
-    deps.traceStore ??
-    (settings.supabaseUrl && settings.supabaseServiceRoleKey
-      ? createTraceStore(settings)
-      : new InMemoryTraceStore());
+  const financeTools = deps.financeTools ?? createFinanceTools(settings);
+  const traceSetup = deps.traceStore
+    ? { store: deps.traceStore, backend: "memory" as const }
+    : createTraceStore(settings);
+  const polishWithGrok =
+    deps.polishWithGrok ??
+    (settings.polishWithGrok && isApiKeyConfigured(settings));
+
+  if (settings.engineMode === "http") {
+    console.info(`[ENGINE_MODE] http → ${settings.engineBaseUrl}`);
+  } else {
+    console.info("[ENGINE_MODE] fake → R1 deterministic FakeFinanceTools");
+  }
+  console.info(`[TRACE_BACKEND] ${traceSetup.backend}`);
+
   const orchestrator = new AgentOrchestrator({
     xai: xaiClient,
     finance: financeTools,
-    traces: traceStore,
+    traces: traceSetup.store,
     idempotency: deps.idempotency ?? new IdempotencyCache(),
-    polishWithGrok: deps.polishWithGrok ?? false,
+    polishWithGrok,
   });
 
   app.setErrorHandler((error: Error, _request, reply) => {
@@ -65,11 +74,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get("/health", async () => ({
     status: "ok",
     service: "scenariolab-agent",
+    engineMode: settings.engineMode,
+    traceBackend: traceSetup.backend,
   }));
 
   app.get("/api/health", async () => ({
     status: "ok",
     service: "scenariolab-agent",
+    engineMode: settings.engineMode,
+    traceBackend: traceSetup.backend,
   }));
 
   app.post(
@@ -133,6 +146,9 @@ export function testSettings(
     xaiApiKey: "test-key-not-real",
     xaiModel: "test-model",
     xaiBaseUrl: "https://api.x.ai/v1",
+    polishWithGrok: false,
+    traceBackend: "memory",
+    engineMode: "fake",
     ...overrides,
   });
 }

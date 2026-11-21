@@ -1,4 +1,5 @@
 import type { AgentSettings } from "../config/env.js";
+import { ResilientTraceStore } from "./resilient.js";
 import {
   InMemoryTraceStore,
   type NewAgentTrace,
@@ -15,7 +16,7 @@ type SupabaseRestConfig = {
 
 /**
  * Thin REST adapter for Supabase PostgreSQL `agent_traces`.
- * Does not require live credentials for unit tests — only constructed when configured.
+ * Unit tests should use InMemoryTraceStore / ResilientTraceStore with mocks.
  */
 export class SupabaseTraceStore implements TraceStore {
   private readonly baseUrl: string;
@@ -133,12 +134,35 @@ export class SupabaseTraceStore implements TraceStore {
   }
 }
 
-export function createTraceStore(settings: AgentSettings): TraceStore {
-  if (settings.supabaseUrl && settings.supabaseServiceRoleKey) {
-    return new SupabaseTraceStore({
-      url: settings.supabaseUrl,
-      serviceRoleKey: settings.supabaseServiceRoleKey,
-    });
+export type TraceBackendKind = "memory" | "supabase";
+
+export function resolveTraceBackend(settings: AgentSettings): TraceBackendKind {
+  if (settings.traceBackend === "memory") return "memory";
+  if (settings.traceBackend === "supabase") {
+    if (!settings.supabaseUrl || !settings.supabaseServiceRoleKey) {
+      throw new Error(
+        "TRACE_BACKEND=supabase requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.",
+      );
+    }
+    return "supabase";
   }
-  return new InMemoryTraceStore();
+  // auto
+  if (settings.supabaseUrl && settings.supabaseServiceRoleKey) return "supabase";
+  return "memory";
+}
+
+export function createTraceStore(settings: AgentSettings): {
+  store: TraceStore;
+  backend: TraceBackendKind;
+} {
+  const backend = resolveTraceBackend(settings);
+  if (backend === "supabase") {
+    const primary = new SupabaseTraceStore({
+      url: settings.supabaseUrl!,
+      serviceRoleKey: settings.supabaseServiceRoleKey!,
+    });
+    return { store: new ResilientTraceStore(primary), backend };
+  }
+  console.info("[TRACE_BACKEND] memory (explicit or Supabase not configured)");
+  return { store: new InMemoryTraceStore(), backend };
 }

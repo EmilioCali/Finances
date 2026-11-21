@@ -27,6 +27,11 @@ const envSchema = z.object({
     .default("http://localhost:8000")
     .transform((value) => value.replace(/\/$/, "")),
   ENGINE_MODE: z.enum(["fake", "http"]).default("fake"),
+  TRACE_BACKEND: z.enum(["auto", "memory", "supabase"]).default("auto"),
+  POLISH_WITH_GROK: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
   SUPABASE_URL: optionalNonEmpty,
   SUPABASE_SERVICE_ROLE_KEY: optionalNonEmpty,
   XAI_TIMEOUT_SECONDS: z.coerce.number().positive().default(20),
@@ -41,6 +46,8 @@ export type AgentSettings = {
   agentPort: number;
   engineBaseUrl: string;
   engineMode: "fake" | "http";
+  traceBackend: "auto" | "memory" | "supabase";
+  polishWithGrok: boolean;
   supabaseUrl: string | undefined;
   supabaseServiceRoleKey: string | undefined;
   timeoutSeconds: number;
@@ -55,6 +62,8 @@ export function settingsFromValues(input: {
   agentPort?: number;
   engineBaseUrl?: string;
   engineMode?: "fake" | "http";
+  traceBackend?: "auto" | "memory" | "supabase";
+  polishWithGrok?: boolean;
   supabaseUrl?: string | undefined;
   supabaseServiceRoleKey?: string | undefined;
   timeoutSeconds?: number;
@@ -72,6 +81,8 @@ export function settingsFromValues(input: {
     agentPort: input.agentPort ?? 8001,
     engineBaseUrl: (input.engineBaseUrl ?? "http://localhost:8000").replace(/\/$/, ""),
     engineMode: input.engineMode ?? "fake",
+    traceBackend: input.traceBackend ?? "auto",
+    polishWithGrok: input.polishWithGrok ?? true,
     supabaseUrl: input.supabaseUrl,
     supabaseServiceRoleKey: input.supabaseServiceRoleKey,
     timeoutSeconds: input.timeoutSeconds ?? 20,
@@ -94,6 +105,8 @@ export function loadEnv(env: NodeJS.ProcessEnv = process.env): AgentSettings {
     agentPort: data.AGENT_PORT,
     engineBaseUrl: data.ENGINE_BASE_URL,
     engineMode: data.ENGINE_MODE,
+    traceBackend: data.TRACE_BACKEND,
+    polishWithGrok: data.POLISH_WITH_GROK,
     supabaseUrl: data.SUPABASE_URL,
     supabaseServiceRoleKey: data.SUPABASE_SERVICE_ROLE_KEY,
     timeoutSeconds: data.XAI_TIMEOUT_SECONDS,
