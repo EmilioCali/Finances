@@ -1,6 +1,6 @@
 /**
  * Trace persistence for D-011.
- * Tests use InMemoryTraceStore; Supabase wiring stays optional until approved.
+ * Tests use InMemoryTraceStore; Supabase wiring stays optional until credentials exist.
  */
 
 export type AgentTraceStatus =
@@ -20,6 +20,7 @@ export type AgentTrace = {
   status: AgentTraceStatus;
   error: Record<string, unknown> | null;
   explanation: string | null;
+  idempotencyKey: string | null;
 };
 
 export type NewAgentTrace = {
@@ -31,6 +32,7 @@ export type NewAgentTrace = {
   status: AgentTraceStatus;
   error?: Record<string, unknown> | null;
   explanation?: string | null;
+  idempotencyKey?: string | null;
 };
 
 export type TracePatch = Partial<
@@ -41,9 +43,14 @@ export interface TraceStore {
   insert(trace: NewAgentTrace): Promise<AgentTrace>;
   update(id: string, patch: TracePatch): Promise<AgentTrace>;
   get(id: string): Promise<AgentTrace | null>;
+  findByIdempotencyKey(key: string): Promise<AgentTrace | null>;
 }
 
 let traceSeq = 0;
+
+export function resetTraceSeqForTests(): void {
+  traceSeq = 0;
+}
 
 function nextTraceId(): string {
   traceSeq += 1;
@@ -65,6 +72,7 @@ export class InMemoryTraceStore implements TraceStore {
       status: input.status,
       error: input.error ?? null,
       explanation: input.explanation ?? null,
+      idempotencyKey: input.idempotencyKey ?? null,
     };
     this.traces.set(trace.id, trace);
     return trace;
@@ -83,36 +91,13 @@ export class InMemoryTraceStore implements TraceStore {
   async get(id: string): Promise<AgentTrace | null> {
     return this.traces.get(id) ?? null;
   }
-}
 
-/**
- * Placeholder for future Supabase PostgreSQL persistence.
- * Stage-1 tests must not import or call this class.
- */
-export class SupabaseTraceStore implements TraceStore {
-  constructor(
-    private readonly url: string,
-    private readonly serviceRoleKey: string,
-  ) {
-    void this.url;
-    void this.serviceRoleKey;
-  }
-
-  async insert(_trace: NewAgentTrace): Promise<AgentTrace> {
-    throw new Error(
-      "SupabaseTraceStore no está habilitado en esta etapa. Usa InMemoryTraceStore.",
-    );
-  }
-
-  async update(_id: string, _patch: TracePatch): Promise<AgentTrace> {
-    throw new Error(
-      "SupabaseTraceStore no está habilitado en esta etapa. Usa InMemoryTraceStore.",
-    );
-  }
-
-  async get(_id: string): Promise<AgentTrace | null> {
-    throw new Error(
-      "SupabaseTraceStore no está habilitado en esta etapa. Usa InMemoryTraceStore.",
-    );
+  async findByIdempotencyKey(key: string): Promise<AgentTrace | null> {
+    for (const trace of this.traces.values()) {
+      if (trace.idempotencyKey === key && trace.status === "EXPLAINED") {
+        return trace;
+      }
+    }
+    return null;
   }
 }

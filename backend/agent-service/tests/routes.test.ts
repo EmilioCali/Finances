@@ -50,18 +50,22 @@ describe("routes (stage-1 acceptance)", () => {
     expect(body.clarification).toBeNull();
   });
 
-  it("POST /api/agent/chat remains pending", async () => {
+  it("POST /api/agent/chat is wired for orchestration", async () => {
     const app = await buildApp({
       settings: testSettings(),
-      xaiTransport: createMockTransport({ content: "{}" }),
+      xaiTransport: createMockTransport({ content: r1IntentJson() }),
     });
     apps.push(app);
     const response = await app.inject({
       method: "POST",
       url: "/api/agent/chat",
-      payload: { message: "hola", approvedAdjustments: null },
+      payload: {
+        message:
+          "Simula una depreciación del quetzal del 10 % y un aumento de costos del 8 % en Guatemala",
+        approvedAdjustments: null,
+      },
     });
-    expect(response.statusCode).toBe(501);
-    expect(response.json().error.code).toBe("NOT_IMPLEMENTED");
+    expect(response.statusCode).toBe(200);
+    expect(response.json().status).toBe("EXPLAINED");
   });
 });

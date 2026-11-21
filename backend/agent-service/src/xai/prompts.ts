@@ -10,11 +10,13 @@ Devuelve ÚNICAMENTE un objeto JSON con esta forma:
       "companyId": "company-gt" | "company-us" | "company-mx" | null
     }
   ],
+  "scenarioId": string | null,
   "clarification": string | null,
   "ambiguous": boolean
 }
 Reglas:
 - EXCHANGE_RATE exige currency. REVENUE y OPERATING_COST usan companyId opcional (null = todo el grupo).
+- COMPARE exige scenarioId del escenario guardado; adjustments puede ir vacío.
 - Si falta un dato crítico o la instrucción es ambigua, pon ambiguous=true y aclara en clarification.
 - No inventes empresas fuera de company-gt, company-us, company-mx.
 - No calcules importes ni tasas. Solo interpreta ajustes.

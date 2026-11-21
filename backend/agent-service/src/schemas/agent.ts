@@ -18,6 +18,7 @@ export const agentProposalSchema = z
     intent: agentIntentSchema,
     adjustments: z.array(agentAdjustmentSchema).default([]),
     clarification: z.string().nullable().optional(),
+    scenarioId: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -25,6 +26,7 @@ export type AgentProposal = {
   intent: AgentIntent;
   adjustments: AgentAdjustment[];
   clarification: string | null;
+  scenarioId?: string | null;
 };
 
 export const grokIntentPayloadSchema = z
@@ -33,6 +35,7 @@ export const grokIntentPayloadSchema = z
     adjustments: z.array(agentAdjustmentSchema).default([]),
     clarification: z.string().nullable().optional(),
     ambiguous: z.boolean().default(false),
+    scenarioId: z.string().min(1).nullable().optional(),
   })
   .passthrough();
 
@@ -41,6 +44,23 @@ export type GrokIntentPayload = {
   adjustments: AgentAdjustment[];
   clarification: string | null;
   ambiguous: boolean;
+  scenarioId: string | null;
+};
+
+export type ChatResponse = {
+  status: ChatStatus;
+  traceId: string;
+  proposal: AgentProposal;
+  scenarioId: string | null;
+  results: Record<string, unknown> | null;
+  explanation: string | null;
+  clarification: string | null;
+};
+
+export type ExplainResponse = {
+  scenarioId: string;
+  results: Record<string, unknown>;
+  explanation: string;
 };
 
 export const interpretRequestSchema = z

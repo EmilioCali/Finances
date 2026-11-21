@@ -4,6 +4,7 @@ export type AgentErrorCode =
   | "AGENT_TIMEOUT"
   | "AGENT_INVALID_RESPONSE"
   | "AGENT_NOT_CONFIGURED"
+  | "NOT_FOUND"
   | "NOT_IMPLEMENTED";
 
 export type ErrorDetail = {
@@ -81,4 +82,8 @@ export function validationError(message: string, details?: ErrorDetail[]): Agent
 
 export function notImplemented(message: string): AgentError {
   return new AgentError("NOT_IMPLEMENTED", message, { httpStatus: 501 });
+}
+
+export function notFound(message: string): AgentError {
+  return new AgentError("NOT_FOUND", message, { httpStatus: 404 });
 }

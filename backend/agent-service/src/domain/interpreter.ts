@@ -18,6 +18,7 @@ function normalizePayload(data: Record<string, unknown>): {
   adjustments: AgentAdjustment[];
   clarification: string | null;
   ambiguous: boolean;
+  scenarioId: string | null;
 } {
   try {
     const parsed = grokIntentPayloadSchema.parse(data);
@@ -26,6 +27,7 @@ function normalizePayload(data: Record<string, unknown>): {
       adjustments: parsed.adjustments,
       clarification: parsed.clarification ?? null,
       ambiguous: parsed.ambiguous,
+      scenarioId: parsed.scenarioId ?? null,
     };
   } catch (error) {
     if (error instanceof ZodError) {
@@ -60,20 +62,24 @@ export function validateProposalFromPayload(
     intent: payload.intent,
     adjustments: payload.adjustments,
     clarification: payload.clarification,
+    scenarioId: payload.scenarioId,
   };
 
   const needsConfirmation =
     payload.ambiguous ||
     (payload.clarification !== null && payload.clarification.trim() !== "") ||
-    (payload.intent === "SIMULATE" && payload.adjustments.length === 0);
+    (payload.intent === "SIMULATE" && payload.adjustments.length === 0) ||
+    (payload.intent === "COMPARE" && !payload.scenarioId);
 
   if (needsConfirmation) {
+    const defaultClarification =
+      payload.intent === "COMPARE" && !payload.scenarioId
+        ? "Indica el scenarioId guardado que quieres comparar contra el presupuesto base."
+        : "Faltan datos para armar el escenario. Indica tipo de ajuste, porcentaje y alcance (empresa o moneda).";
     return {
       status: "NEEDS_CONFIRMATION",
       proposal,
-      clarification:
-        payload.clarification ??
-        "Faltan datos para armar el escenario. Indica tipo de ajuste, porcentaje y alcance (empresa o moneda).",
+      clarification: payload.clarification ?? defaultClarification,
     };
   }
 

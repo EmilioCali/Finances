@@ -6,9 +6,12 @@ import Fastify, {
 
 import type { AgentSettings } from "./config/env.js";
 import { settingsFromValues } from "./config/env.js";
+import { createTraceStore } from "./db/supabase.js";
 import { InMemoryTraceStore, type TraceStore } from "./db/traces.js";
-import { AgentError, notImplemented } from "./domain/errors.js";
+import { AgentError } from "./domain/errors.js";
+import { IdempotencyCache } from "./domain/idempotency.js";
 import { interpretMessage } from "./domain/interpreter.js";
+import { AgentOrchestrator } from "./domain/orchestrator.js";
 import { FakeFinanceTools } from "./engine/fake.js";
 import type { FinanceTools } from "./engine/types.js";
 import {
@@ -23,6 +26,8 @@ export type AppDeps = {
   xaiTransport?: CompletionTransport;
   financeTools?: FinanceTools;
   traceStore?: TraceStore;
+  idempotency?: IdempotencyCache;
+  polishWithGrok?: boolean;
   logger?: boolean;
 };
 
@@ -31,11 +36,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const settings = deps.settings;
   const xaiClient = new XAIClient(settings, deps.xaiTransport);
   const financeTools = deps.financeTools ?? new FakeFinanceTools();
-  const traceStore = deps.traceStore ?? new InMemoryTraceStore();
-
-  // Reserved for later stages (/chat). Keep reference so wiring stays explicit.
-  void financeTools;
-  void traceStore;
+  const traceStore =
+    deps.traceStore ??
+    (settings.supabaseUrl && settings.supabaseServiceRoleKey
+      ? createTraceStore(settings)
+      : new InMemoryTraceStore());
+  const orchestrator = new AgentOrchestrator({
+    xai: xaiClient,
+    finance: financeTools,
+    traces: traceStore,
+    idempotency: deps.idempotency ?? new IdempotencyCache(),
+    polishWithGrok: deps.polishWithGrok ?? false,
+  });
 
   app.setErrorHandler((error: Error, _request, reply) => {
     if (error instanceof AgentError) {
@@ -78,7 +90,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   );
 
-  app.post("/api/agent/chat", async (request: FastifyRequest) => {
+  app.post("/api/agent/chat", async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = chatRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AgentError("VALIDATION_ERROR", "Cuerpo de chat inválido.", {
@@ -89,28 +101,27 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         })),
       });
     }
-    void parsed.data;
-    throw notImplemented(
-      "POST /api/agent/chat se implementa en la siguiente etapa (orquestación + motor).",
-    );
+    const result = await orchestrator.chat(parsed.data);
+    return reply.send(result);
   });
 
-  app.post("/api/agent/explain", async (request: FastifyRequest) => {
-    const parsed = explainRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      throw new AgentError("VALIDATION_ERROR", "Cuerpo de explain inválido.", {
-        httpStatus: 400,
-        details: parsed.error.issues.map((issue) => ({
-          field: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
-    }
-    void parsed.data;
-    throw notImplemented(
-      "POST /api/agent/explain se implementa en la siguiente etapa.",
-    );
-  });
+  app.post(
+    "/api/agent/explain",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = explainRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AgentError("VALIDATION_ERROR", "Cuerpo de explain inválido.", {
+          httpStatus: 400,
+          details: parsed.error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            message: issue.message,
+          })),
+        });
+      }
+      const result = await orchestrator.explain(parsed.data.scenarioId);
+      return reply.send(result);
+    },
+  );
 
   return app;
 }
